@@ -1,6 +1,8 @@
 import socket
 import sys
 import os
+import mimetypes
+
 
 def response_ok(body=b"This is a minimal response", mimetype=b"text/plain"):
     """
@@ -51,8 +53,12 @@ def response_not_found():
     # You can re-use most of the code from the 405 Method Not
     # Allowed response.
 
-    pass
-    
+    return b"\r\n".join([
+                b"HTTP/1.1 404 Not Found response",
+                b"",
+                b"Page Not found on this server!",
+            ])
+
 
 def resolve_uri(uri):
     """
@@ -89,8 +95,21 @@ def resolve_uri(uri):
     # Hint: When opening a file, use open(filename, "rb") to open and read the
     # file as a stream of bytes.
 
-    content = b"not implemented"
-    mime_type = b"not implemented"
+
+    uri = "webroot/" + uri
+ 
+    if os.path.isdir(uri):
+        content = b''
+        for i in os.listdir(uri):
+            content += (i + '\n').encode()
+        #content = str(os.listdir(uri)).encode()
+        mime_type = b'text/plain'
+    elif os.path.isfile(uri):
+        with open(uri, "rb") as content_file:
+            content = content_file.read()
+        mime_type = mimetypes.guess_type(uri)[0].encode()
+    else:
+        raise NameError
 
     return content, mime_type
 
@@ -123,13 +142,18 @@ def server(log_buffer=sys.stderr):
                     uri = parse_request(request)
                 except NotImplementedError:
                     response = response_method_not_allowed()
+                
                 else:
                     # TODO: resolve_uri will raise a NameError if the file
                     # specified by uri can't be found. If it does raise a
                     # NameError, then let response get response_not_found()
                     # instead of response_ok()
-                    body, mimetype = resolve_uri(uri)
-                    response = response_ok(body=body, mimetype=mimetype)
+                    try:
+                        body, mimetype = resolve_uri(uri)
+                    except NameError:
+                        response = response_not_found()
+                    else:
+                        response = response_ok(body=body, mimetype=mimetype)
 
                 conn.sendall(response)
             finally:
